@@ -1,0 +1,72 @@
+# StayHive - Hospitality MCP Server Configuration
+
+business:
+  name: "West Bethel Motel"
+  type: "hospitality"
+  location: "Bethel, Maine"
+
+# Hotel/Motel Details
+property:
+  check_in_time: "16:00"  # 4:00 PM
+  check_out_time: "10:00"  # 10:00 AM
+  room_types:
+    - name: "Standard Queen"
+      capacity: 2
+      pets_allowed: false
+      base_price: 120
+    - name: "King Suite"
+      capacity: 2
+      pets_allowed: false
+      base_price: 180
+    - name: "Pet-Friendly Room"
+      capacity: 2
+      pets_allowed: true
+      base_price: 140
+      pet_fee: 20
+
+  amenities:
+    - "Free WiFi"
+    - "Continental Breakfast"
+    - "Free Parking"
+    - "Pet-Friendly Rooms Available"
+
+# MCP Server Configuration
+mcp:
+  # Tools exposed via MCP
+  tools:
+    - check_availability
+    - create_reservation
+    - create_lead
+    - generate_payment_link
+    - search_knowledge_base
+
+  # Resources exposed via MCP
+  resources:
+    - hotel_policies
+    - room_information
+    - local_area_guide
+    - amenities
+
+  # Prompt templates
+  prompts:
+    - guest_greeting
+    - availability_inquiry
+    - booking_confirmation
+    - pet_policy_inquiry
+
+# Knowledge Base Categories
+knowledge_base:
+  categories:
+    - policies
+    - local_area
+    - amenities
+    - faq
+
+# Cloud Sync (Optional)
+cloud:
+  enabled: false  # Set via environment variable BIZHIVE_CLOUD_ENABLED
+  sync_events:
+    - new_lead
+    - new_reservation
+    - conversation_end
+  analytics_interval: 3600  # Push analytics every hour

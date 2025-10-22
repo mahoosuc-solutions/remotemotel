@@ -1,0 +1,55 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: westbethel-operator
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '10'
+    spec:
+      containerConcurrency: 250
+      timeoutSeconds: 3600
+      containers:
+      - image: gcr.io/westbethelmotel/hotel-operator-agent:latest
+        ports:
+        - name: http1
+          containerPort: 8080
+        resources:
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        env:
+        - name: ENV
+          value: production
+        - name: PROJECT_ID
+          value: westbethelmotel
+        - name: REGION
+          value: us-central1
+        - name: VOICE_ENABLED
+          value: 'true'
+        - name: OPENAI_REALTIME_ENABLED
+          value: 'true'
+        - name: TWILIO_PHONE_NUMBER
+          value: '+12072203501'
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-api-key
+              key: '1'
+        - name: TWILIO_ACCOUNT_SID
+          valueFrom:
+            secretKeyRef:
+              name: twilio-account-sid
+              key: '1'
+        - name: TWILIO_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: twilio-auth-token
+              key: '1'
+  traffic:
+  - percent: 100
+    latestRevision: true

@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Tenant {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id     String   @unique
+  name          String
+  config        Json     @default("{}")
+  phone_config  Json     @default("{}")
+  voice_settings Json    @default("{}")
+  created_at    DateTime @default(now())
+
+  @@map("tenants")
+}
+
+model Transcript {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id    String
+  role         String
+  content      String
+  audio_base64 String?
+  created_at   DateTime @default(now())
+
+  @@map("transcripts")
+  @@index([tenant_id, created_at(sort: Desc)])
+}

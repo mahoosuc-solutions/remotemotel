@@ -1,0 +1,17 @@
+# Voice AI Server Requirements
+# Core FastAPI and WebSocket support
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+websockets==14.1
+
+hypercorn==0.17.3
+
+# Twilio SDK for Voice/Media Streams
+twilio==9.8.4
+
+# OpenAI for Realtime API
+openai==1.58.1
+
+# Environment and utilities
+python-dotenv==1.0.1
+aiofiles==24.1.0

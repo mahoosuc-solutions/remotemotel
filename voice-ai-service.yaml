@@ -1,0 +1,52 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: voice-ai-assistant
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/execution-environment: gen2
+spec:
+  template:
+    metadata:
+      annotations:
+        # Enable WebSocket support
+        run.googleapis.com/execution-environment: gen2
+        # Set timeout for long-running connections
+        run.googleapis.com/timeout: 3600s
+        # CPU allocation during request processing
+        run.googleapis.com/cpu-throttling: "false"
+    spec:
+      # Set container concurrency to handle WebSocket connections
+      containerConcurrency: 100
+      timeoutSeconds: 3600
+      containers:
+      - name: voice-ai-server
+        image: gcr.io/PROJECT_ID/voice-ai-assistant:latest
+        ports:
+        - name: http1
+          containerPort: 8000
+        env:
+        - name: PORT
+          value: "8000"
+        - name: ENV
+          value: "production"
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+          requests:
+            cpu: 1000m
+            memory: 1Gi
+        # Health check
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
