@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: front-desk-postgres
+    environment:
+      POSTGRES_DB: stayhive
+      POSTGRES_USER: stayhive
+      POSTGRES_PASSWORD: stayhive
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stayhive"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

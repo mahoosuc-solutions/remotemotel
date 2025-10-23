@@ -23,10 +23,11 @@ from fastapi import WebSocket
 
 from packages.voice.realtime import RealtimeAPIClient
 from packages.voice.audio import (
+    AudioCodec,
+    AudioFormat,
     mulaw_decode,
     mulaw_encode,
     resample_audio,
-    AudioFormat
 )
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,20 @@ class TwilioOpenAIRelay:
 
         # State
         self.active = False
-        self.twilio_stream_sid = None
+        self.twilio_stream_sid = stream_sid
+
+        self.twilio_format = AudioFormat(
+            codec=AudioCodec.MULAW,
+            sample_rate=8000,
+            channels=1,
+            sample_width=1,
+        )
+        self.openai_format = AudioFormat(
+            codec=AudioCodec.PCM,
+            sample_rate=24000,
+            channels=1,
+            sample_width=2,
+        )
 
         # Statistics
         self.twilio_packets_received = 0

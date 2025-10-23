@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from packages.hotel.api import router as hotel_router
 from packages.hotel.admin import router as admin_router
+from packages.knowledge.api import router as knowledge_router
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +37,7 @@ app.add_middleware(
 # Include routers
 app.include_router(hotel_router)
 app.include_router(admin_router)
+app.include_router(knowledge_router)
 
 # Health check endpoint
 @app.get("/health")

@@ -2,12 +2,13 @@
 import os
 from typing import Optional
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from contextlib import contextmanager
 
 # Base for all models
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """Base class for all database models"""
+    pass
 
 
 class DatabaseManager:

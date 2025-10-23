@@ -1,37 +1,31 @@
 """
-Voice-specific tools for hotel operations
+Voice-specific tools for hotel operations.
 
-These tools are designed to work with voice interactions and integrate
-with the existing hotel tools (check_availability, create_lead, etc.)
+These helpers are designed to work with realtime voice interactions and to
+wrap the core hotel logic so the agent can provide friendly, structured
+responses over the phone.
 """
 
-import os
+from __future__ import annotations
+
 import logging
-from typing import Optional, Dict, Any
+import os
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
 async def transfer_to_human(
-    session_id: str,
+    session_id: Optional[str] = None,
     department: str = "front_desk",
-    reason: Optional[str] = None
+    reason: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Transfer call to a human operator
+    """Return contact details for transferring a caller to staff."""
 
-    Args:
-        session_id: Voice session identifier
-        department: Department to transfer to ('front_desk', 'housekeeping', 'management')
-        reason: Reason for transfer
+    session_identifier = session_id or "unknown"
+    logger.info("Session %s: Transferring to %s", session_identifier, department)
 
-    Returns:
-        Transfer status and phone number
-    """
-    logger.info(f"Session {session_id}: Transferring to {department}")
-
-    # Department phone mapping (these should come from configuration)
     department_phones = {
         "front_desk": os.getenv("FRONT_DESK_PHONE", "+15555551234"),
         "housekeeping": os.getenv("HOUSEKEEPING_PHONE", "+15555551235"),
@@ -40,78 +34,63 @@ async def transfer_to_human(
     }
 
     phone = department_phones.get(department)
-
     if not phone:
-        logger.error(f"No phone configured for department: {department}")
+        logger.error("No phone configured for department: %s", department)
         return {
             "success": False,
             "error": f"Department '{department}' not found",
-            "message": "I apologize, but I'm unable to transfer you at this time. Please try calling back."
+            "message": "I apologize, but I'm unable to transfer you at this time.",
         }
 
     return {
         "success": True,
+        "session_id": session_identifier,
         "department": department,
         "phone_number": phone,
         "reason": reason,
         "message": f"Transferring you to our {department.replace('_', ' ')} team. Please hold.",
         "twiml_action": "dial",
-        "twiml_number": phone
+        "twiml_number": phone,
     }
 
 
 async def play_hold_music(
-    session_id: str,
+    session_id: Optional[str] = None,
     duration_seconds: int = 30,
-    music_url: Optional[str] = None
+    music_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Play hold music while processing request
+    """Play hold music while the assistant works on a request."""
 
-    Args:
-        session_id: Voice session identifier
-        duration_seconds: How long to play music
-        music_url: URL of music file (uses default if None)
-
-    Returns:
-        Music playback information
-    """
-    logger.info(f"Session {session_id}: Playing hold music for {duration_seconds}s")
+    session_identifier = session_id or "unknown"
+    logger.info("Session %s: Playing hold music for %ss", session_identifier, duration_seconds)
 
     default_music = os.getenv(
         "HOLD_MUSIC_URL",
-        "https://assets.stayhive.ai/hold-music/gentle-piano.mp3"
+        "https://assets.stayhive.ai/hold-music/gentle-piano.mp3",
     )
 
     music_url = music_url or default_music
 
     return {
         "success": True,
+        "session_id": session_identifier,
         "music_url": music_url,
         "duration_seconds": duration_seconds,
         "message": "Please hold while I look that up for you.",
         "twiml_action": "play",
-        "twiml_url": music_url
+        "twiml_url": music_url,
     }
 
 
 async def send_sms_confirmation(
     phone: str,
     message: str,
-    session_id: Optional[str] = None
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Send SMS confirmation to guest
+    """Send an SMS confirmation via Twilio."""
 
-    Args:
-        phone: Guest's phone number
-        message: Message to send
-        session_id: Voice session identifier (for tracking)
-
-    Returns:
-        SMS send status
-    """
-    logger.info(f"Sending SMS to {phone}: {message[:50]}...")
+    session_identifier = session_id or "unknown"
+    logger.info("Session %s: Sending SMS to %s", session_identifier, phone)
 
     try:
         from twilio.rest import Client
@@ -121,37 +100,31 @@ async def send_sms_confirmation(
         from_number = os.getenv("TWILIO_PHONE_NUMBER")
 
         if not all([account_sid, auth_token, from_number]):
-            logger.error("Twilio not configured for SMS")
+            logger.error("Twilio SMS credentials not configured")
             return {
                 "success": False,
                 "error": "SMS not configured",
-                "message": "I'm unable to send an SMS at this time. Would you like me to email you instead?"
+                "message": "I'm unable to send an SMS at this time. Would you like email instead?",
             }
 
         client = Client(account_sid, auth_token)
-
-        sms = client.messages.create(
-            body=message,
-            from_=from_number,
-            to=phone
-        )
-
-        logger.info(f"SMS sent successfully: {sms.sid}")
+        sms = client.messages.create(body=message, from_=from_number, to=phone)
 
         return {
             "success": True,
+            "session_id": session_identifier,
             "message_sid": sms.sid,
             "to": phone,
+            "status": sms.status,
             "message": "I've sent you a confirmation via SMS.",
-            "status": sms.status
         }
 
-    except Exception as e:
-        logger.error(f"Failed to send SMS: {e}", exc_info=True)
+    except Exception as exc:  # pragma: no cover - upstream errors
+        logger.error("Failed to send SMS: %s", exc, exc_info=True)
         return {
             "success": False,
-            "error": str(e),
-            "message": "I encountered an error sending the SMS. Would you like to try a different contact method?"
+            "error": str(exc),
+            "message": "I ran into an issue sending that SMS. Would you like to try another contact method?",
         }
 
 
@@ -159,124 +132,107 @@ async def schedule_callback(
     phone: str,
     callback_time: datetime,
     reason: Optional[str] = None,
-    session_id: Optional[str] = None
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Schedule a callback to the guest
+    """Return a scheduled callback payload (mock implementation)."""
 
-    Args:
-        phone: Guest's phone number
-        callback_time: When to call back
-        reason: Reason for callback
-        session_id: Voice session identifier
-
-    Returns:
-        Callback scheduling status
-    """
-    logger.info(f"Scheduling callback to {phone} at {callback_time}")
-
-    # TODO: Integrate with actual scheduling system
-    # For now, return mock response
+    session_identifier = session_id or "unknown"
+    logger.info(
+        "Session %s: Scheduling callback to %s at %s",
+        session_identifier,
+        phone,
+        callback_time,
+    )
 
     return {
         "success": True,
+        "session_id": session_identifier,
         "phone": phone,
         "callback_time": callback_time.isoformat(),
         "reason": reason,
         "message": f"I've scheduled a callback to {phone} at {callback_time.strftime('%I:%M %p')}.",
-        "callback_id": f"CB-{datetime.utcnow().timestamp()}"
+        "callback_id": f"CB-{datetime.utcnow().timestamp()}",
     }
 
 
 async def handle_ivr_menu(
-    session_id: str,
-    dtmf_input: str,
-    menu_level: int = 1
+    session_id: Optional[str] = None,
+    dtmf_input: Optional[str] = None,
+    menu_level: int = 1,
 ) -> Dict[str, Any]:
-    """
-    Handle IVR menu DTMF input
+    """Handle IVR DTMF input and return the next action."""
 
-    Args:
-        session_id: Voice session identifier
-        dtmf_input: DTMF digit pressed (0-9, *, #)
-        menu_level: Current menu level
+    if dtmf_input is None:
+        raise ValueError("dtmf_input is required")
 
-    Returns:
-        Menu action and response
-    """
-    logger.info(f"Session {session_id}: IVR input '{dtmf_input}' at level {menu_level}")
+    session_identifier = session_id or "unknown"
+    logger.info(
+        "Session %s: IVR input '%s' at level %s",
+        session_identifier,
+        dtmf_input,
+        menu_level,
+    )
 
-    # Main menu (level 1)
     if menu_level == 1:
         menu_actions = {
             "1": {
                 "action": "check_availability",
                 "message": "You selected room availability. Let me connect you to our booking system.",
-                "next_level": 2
+                "next_level": 2,
             },
             "2": {
                 "action": "existing_reservation",
                 "message": "You selected existing reservations. Please provide your confirmation number.",
-                "next_level": 3
+                "next_level": 3,
             },
             "3": {
                 "action": "amenities_info",
                 "message": "You selected hotel amenities and services information.",
-                "next_level": 4
+                "next_level": 4,
             },
             "4": {
                 "action": "transfer_to_human",
                 "message": "Transferring you to a staff member. Please hold.",
-                "next_level": 0
+                "next_level": 0,
             },
             "0": {
                 "action": "operator",
                 "message": "Connecting you to the front desk.",
-                "next_level": 0
-            }
+                "next_level": 0,
+            },
         }
 
-        action = menu_actions.get(dtmf_input, {
-            "action": "invalid",
-            "message": "Invalid selection. Please press 1 for availability, 2 for existing reservations, 3 for amenities, or 0 for the front desk.",
-            "next_level": 1
-        })
+        action = menu_actions.get(
+            dtmf_input,
+            {
+                "action": "invalid",
+                "message": "Invalid selection. Please press 1 for availability, 2 for reservations, 3 for amenities, or 0 for the front desk.",
+                "next_level": 1,
+            },
+        )
 
         return {
             "success": True,
+            "session_id": session_identifier,
             "action": action["action"],
             "message": action["message"],
             "next_level": action["next_level"],
-            "dtmf_input": dtmf_input
+            "dtmf_input": dtmf_input,
         }
 
-    # Additional menu levels can be added here
     return {
         "success": False,
+        "session_id": session_identifier,
         "action": "unknown",
         "message": "I didn't understand that selection. Let me connect you to a staff member.",
-        "next_level": 0
+        "next_level": 0,
     }
 
 
-async def get_caller_history(
-    phone: str,
-    limit: int = 5
-) -> Dict[str, Any]:
-    """
-    Retrieve previous interactions with this caller
+async def get_caller_history(phone: str, limit: int = 5) -> Dict[str, Any]:
+    """Return previous caller interactions (placeholder implementation)."""
 
-    Args:
-        phone: Caller's phone number
-        limit: Maximum number of calls to retrieve
-
-    Returns:
-        Caller history
-    """
-    logger.info(f"Retrieving caller history for {phone}")
-
-    # TODO: Query database for actual call history
-    # For now, return mock response
+    logger.info("Retrieving caller history for %s", phone)
 
     return {
         "success": True,
@@ -286,112 +242,91 @@ async def get_caller_history(
         "previous_reservations": [],
         "previous_leads": [],
         "notes": None,
-        "message": "This appears to be your first time calling us. Welcome!"
+        "message": "This appears to be your first time calling us. Welcome!",
     }
 
 
 async def record_voice_note(
-    session_id: str,
-    max_duration_seconds: int = 60
+    session_id: Optional[str] = None,
+    max_duration_seconds: int = 60,
 ) -> Dict[str, Any]:
-    """
-    Record a voice note from the caller
+    """Return instructions to record a voice note."""
 
-    Args:
-        session_id: Voice session identifier
-        max_duration_seconds: Maximum recording duration
-
-    Returns:
-        Recording information
-    """
-    logger.info(f"Session {session_id}: Starting voice recording (max {max_duration_seconds}s)")
+    session_identifier = session_id or "unknown"
+    logger.info(
+        "Session %s: Starting voice recording (max %ss)",
+        session_identifier,
+        max_duration_seconds,
+    )
 
     return {
         "success": True,
-        "session_id": session_id,
+        "session_id": session_identifier,
         "max_duration": max_duration_seconds,
         "message": "Please leave your message after the beep. Press any key when you're done.",
         "twiml_action": "record",
         "twiml_max_length": max_duration_seconds,
-        "twiml_finish_on_key": "#"
+        "twiml_finish_on_key": "#",
     }
 
 
 async def announce_to_session(
-    session_id: str,
-    message: str,
-    voice: str = "Polly.Joanna"
+    session_id: Optional[str] = None,
+    message: Optional[str] = None,
+    voice: str = "Polly.Joanna",
 ) -> Dict[str, Any]:
-    """
-    Announce a message to the caller via TTS
+    """Return a TTS announcement payload."""
 
-    Args:
-        session_id: Voice session identifier
-        message: Text to speak
-        voice: TTS voice to use
+    if message is None:
+        raise ValueError("message is required")
 
-    Returns:
-        Announcement status
-    """
-    logger.info(f"Session {session_id}: Announcing message: {message[:50]}...")
+    session_identifier = session_id or "unknown"
+    logger.info("Session %s: Announcing message %s", session_identifier, message[:50])
 
     return {
         "success": True,
-        "session_id": session_id,
+        "session_id": session_identifier,
         "message": message,
         "voice": voice,
         "twiml_action": "say",
         "twiml_text": message,
-        "twiml_voice": voice
+        "twiml_voice": voice,
     }
 
 
 async def format_for_voice(data: Dict[str, Any], data_type: str = "availability") -> str:
-    """
-    Format data for voice output
+    """Format structured data into natural language for TTS."""
 
-    Converts structured data into natural language suitable for TTS.
-
-    Args:
-        data: Data to format
-        data_type: Type of data ('availability', 'reservation', 'lead', etc.)
-
-    Returns:
-        Natural language description
-    """
     if data_type == "availability":
-        # Format room availability for voice
         available = data.get("available", 0)
         check_in = data.get("check_in")
         check_out = data.get("check_out")
 
-        if available == 0:
+        if not available:
             return f"I'm sorry, we don't have any rooms available from {check_in} to {check_out}."
-        elif available == 1:
+        if available == 1:
             return f"Great news! We have 1 room available from {check_in} to {check_out}."
-        else:
-            return f"Excellent! We have {available} rooms available from {check_in} to {check_out}."
+        return f"Excellent! We have {available} rooms available from {check_in} to {check_out}."
 
-    elif data_type == "reservation":
-        # Format reservation confirmation for voice
+    if data_type == "reservation":
         confirmation = data.get("confirmation_number")
         guest_name = data.get("guest_name")
         check_in = data.get("check_in")
+        return (
+            f"Your reservation is confirmed, {guest_name}. "
+            f"Your confirmation number is {confirmation}. We look forward to welcoming you on {check_in}."
+        )
 
-        return f"Your reservation is confirmed, {guest_name}. Your confirmation number is {confirmation}. We look forward to welcoming you on {check_in}."
-
-    elif data_type == "lead":
-        # Format lead creation for voice
+    if data_type == "lead":
         lead_id = data.get("lead_id")
+        return (
+            f"Thank you for your interest. I've recorded your inquiry as reference number {lead_id}. "
+            "A member of our team will follow up with you shortly."
+        )
 
-        return f"Thank you for your interest. I've recorded your inquiry as reference number {lead_id}. A member of our team will follow up with you shortly."
-
-    else:
-        # Generic formatting
-        return str(data)
+    return str(data)
 
 
-# Tool registry for easy access
 VOICE_TOOLS = {
     "transfer_to_human": transfer_to_human,
     "play_hold_music": play_hold_music,
@@ -405,39 +340,24 @@ VOICE_TOOLS = {
 }
 
 
-async def execute_voice_tool(
-    tool_name: str,
-    **kwargs
-) -> Dict[str, Any]:
-    """
-    Execute a voice tool by name
+async def execute_voice_tool(tool_name: str, **kwargs: Any) -> Dict[str, Any]:
+    """Execute a voice tool by name."""
 
-    Args:
-        tool_name: Name of the tool to execute
-        **kwargs: Tool parameters
-
-    Returns:
-        Tool execution result
-    """
     tool = VOICE_TOOLS.get(tool_name)
-
     if not tool:
-        logger.error(f"Unknown voice tool: {tool_name}")
+        logger.error("Unknown voice tool: %s", tool_name)
         return {
             "success": False,
             "error": f"Tool '{tool_name}' not found",
-            "available_tools": list(VOICE_TOOLS.keys())
+            "available_tools": list(VOICE_TOOLS.keys()),
         }
 
     try:
-        result = await tool(**kwargs)
-        logger.info(f"Voice tool '{tool_name}' executed successfully")
-        return result
-
-    except Exception as e:
-        logger.error(f"Error executing voice tool '{tool_name}': {e}", exc_info=True)
+        return await tool(**kwargs)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("Error executing voice tool '%s': %s", tool_name, exc, exc_info=True)
         return {
             "success": False,
-            "error": str(e),
-            "tool": tool_name
+            "error": str(exc),
+            "tool": tool_name,
         }

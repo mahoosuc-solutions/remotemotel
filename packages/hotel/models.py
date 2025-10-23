@@ -12,11 +12,13 @@ from sqlalchemy import (
     Column, Integer, String, DateTime, Date, Time, Boolean, 
     Text, ForeignKey, Numeric, Enum as SQLEnum, Index
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship, DeclarativeBase
 from sqlalchemy import JSON
 import json
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models"""
+    pass
 
 
 class RoomType(str, Enum):

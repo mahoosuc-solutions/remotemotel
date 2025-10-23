@@ -5,10 +5,11 @@ Database models for voice interactions
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import Column, Integer, String, DateTime, Float, Text, JSON, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, DeclarativeBase
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """Base class for all voice models"""
+    pass
 
 
 class VoiceCall(Base):

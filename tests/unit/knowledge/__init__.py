@@ -1,0 +1,3 @@
+"""
+Knowledge service tests package.
+"""

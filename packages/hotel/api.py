@@ -9,7 +9,7 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, HTTPException, Depends, Query, Body
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from packages.hotel.models import RoomType, BookingStatus, PaymentStatus, RateType
@@ -33,7 +33,7 @@ def get_db_session():
 class GuestInfo(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    email: str = Field(..., regex=r'^[^@]+@[^@]+\.[^@]+$')
+    email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
     phone: Optional[str] = Field(None, max_length=20)
     address: Optional[str] = None
     city: Optional[str] = None
@@ -62,9 +62,10 @@ class BookingRequest(BaseModel):
     special_requests: Optional[str] = None
     source: str = Field(default="api")
     
-    @validator('check_out')
-    def check_out_after_check_in(cls, v, values):
-        if 'check_in' in values and v <= values['check_in']:
+    @field_validator('check_out')
+    @classmethod
+    def check_out_after_check_in(cls, v, info):
+        if 'check_in' in info.data and v <= info.data['check_in']:
             raise ValueError('Check-out must be after check-in')
         return v
 
@@ -78,9 +79,10 @@ class RateRequest(BaseModel):
     min_nights: int = Field(default=1, ge=1)
     max_nights: Optional[int] = Field(None, ge=1)
     
-    @validator('end_date')
-    def end_date_after_effective_date(cls, v, values):
-        if 'effective_date' in values and v <= values['effective_date']:
+    @field_validator('end_date')
+    @classmethod
+    def end_date_after_effective_date(cls, v, info):
+        if 'effective_date' in info.data and v <= info.data['effective_date']:
             raise ValueError('End date must be after effective date')
         return v
 
@@ -155,7 +157,7 @@ async def create_booking(
         booking_service = BookingService(db)
         
         # Convert guest info to dict
-        guest_data = booking_request.guest.dict()
+        guest_data = booking_request.guest.model_dump()
         
         booking = booking_service.create_booking(
             guest_data=guest_data,
@@ -336,13 +338,18 @@ async def get_rates(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class AvailabilityUpdateRequest(BaseModel):
+    """Request model for updating availability"""
+    room_type: RoomType
+    date: date
+    total_inventory: int = Field(..., ge=0, description="Total inventory for this room type")
+    booked_count: int = Field(default=0, ge=0, description="Number of rooms already booked")
+    maintenance: bool = Field(default=False, description="Whether rooms are out for maintenance")
+
+
 @router.post("/availability/update")
 async def update_availability(
-    room_type: RoomType,
-    date: date,
-    total_inventory: int = Field(..., ge=0, description="Total inventory for this room type"),
-    booked_count: int = Field(0, ge=0, description="Number of rooms already booked"),
-    maintenance: bool = Field(False, description="Whether rooms are out for maintenance"),
+    request: AvailabilityUpdateRequest,
     db: Session = Depends(get_db_session)
 ):
     """
@@ -350,18 +357,18 @@ async def update_availability(
     """
     try:
         availability_service = AvailabilityService(db)
-        
+
         availability = availability_service.update_availability(
-            room_type=room_type,
-            date=date,
-            total_inventory=total_inventory,
-            booked_count=booked_count,
-            maintenance=maintenance
+            room_type=request.room_type,
+            date=request.date,
+            total_inventory=request.total_inventory,
+            booked_count=request.booked_count,
+            maintenance=request.maintenance
         )
-        
+
         return {
-            "room_type": room_type.value,
-            "date": date.isoformat(),
+            "room_type": request.room_type.value,
+            "date": request.date.isoformat(),
             "total_inventory": availability.total_inventory,
             "booked_count": availability.booked_count,
             "available_count": availability.available_count,
@@ -475,7 +482,7 @@ async def get_dashboard_data(
                 "revenue": total_revenue
             },
             "availability": availability_summary,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(datetime.UTC).isoformat() if hasattr(datetime, 'UTC') else datetime.utcnow().isoformat()
         }
         
     except Exception as e:

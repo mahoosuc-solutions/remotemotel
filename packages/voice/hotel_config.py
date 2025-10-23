@@ -1,26 +1,18 @@
 """
-Hotel-Specific Configuration for West Bethel Motel
-
-This module contains the AI agent configuration, instructions,
-and tool registration specific to West Bethel Motel.
-
-This follows OpenAI best practices for voice agent configuration.
+Hotel-specific realtime configuration utilities.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+from packages.voice.function_registry import create_hotel_function_registry
 from packages.voice.realtime import RealtimeAPIClient
-from packages.tools import (
-    search_kb,
-    check_availability,
-    create_lead,
-    generate_payment_link
-)
-from packages.tools.create_booking import create_booking
 
 logger = logging.getLogger(__name__)
 
-# West Bethel Motel AI Concierge Instructions
+# Hotel instructions used as the default system prompt.
 WEST_BETHEL_INSTRUCTIONS = """You are the friendly AI concierge for West Bethel Motel, a cozy independent motel in Bethel, Maine.
 
 ## Your Role
@@ -71,13 +63,6 @@ WEST_BETHEL_INSTRUCTIONS = """You are the friendly AI concierge for West Bethel 
 - Keep responses concise but complete - avoid long monologues
 - Use verbal confirmation ("I understand you'd like to...") before taking action
 
-## Important Guidelines
-- ALWAYS use the check_availability tool when guests inquire about room availability
-- ALWAYS use the create_lead tool to capture booking requests with guest details
-- Use search_kb to look up specific policy questions or amenities
-- Be honest if you can't help with something - offer to have staff call them back
-- Never make up information - use your tools or say you'll find out
-
 ## Handling Common Scenarios
 
 ### Booking Inquiry
@@ -105,223 +90,53 @@ Remember: You're representing West Bethel Motel - be the voice that makes guests
 
 
 def register_hotel_tools(openai_client: RealtimeAPIClient) -> None:
-    """
-    Register West Bethel Motel specific tools with OpenAI Realtime API
+    """Register all hotel tools with the supplied realtime client."""
 
-    Args:
-        openai_client: Connected RealtimeAPIClient instance
-    """
-    logger.info("Registering hotel tools...")
+    registry = create_hotel_function_registry()
+    logger.info("Registering %s realtime tools", len(registry.functions))
 
-    # Tool 1: Search Knowledge Base
-    openai_client.register_function(
-        name="search_kb",
-        func=search_kb,
-        description="Search the hotel's knowledge base for information about policies, amenities, local attractions, or other hotel details",
-        parameters={
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query (e.g., 'pet policy', 'check-in time', 'nearby restaurants')"
-                }
-            },
-            "required": ["query"]
-        }
-    )
-
-    # Tool 2: Check Room Availability
-    openai_client.register_function(
-        name="check_availability",
-        func=check_availability,
-        description="Check room availability for specific dates. Always use this when a guest asks about booking or availability.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "check_in": {
-                    "type": "string",
-                    "description": "Check-in date in YYYY-MM-DD format"
-                },
-                "check_out": {
-                    "type": "string",
-                    "description": "Check-out date in YYYY-MM-DD format"
-                },
-                "adults": {
-                    "type": "integer",
-                    "description": "Number of adults (default 2)"
-                },
-                "pets": {
-                    "type": "boolean",
-                    "description": "Whether the guest is bringing pets"
-                }
-            },
-            "required": ["check_in", "check_out"]
-        }
-    )
-
-    # Tool 3: Create Lead (Capture Booking Intent)
-    openai_client.register_function(
-        name="create_lead",
-        func=create_lead,
-        description="Capture guest information for a booking request. Use this after checking availability when a guest wants to book.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Guest's full name"
-                },
-                "email": {
-                    "type": "string",
-                    "description": "Guest's email address"
-                },
-                "phone": {
-                    "type": "string",
-                    "description": "Guest's phone number"
-                },
-                "check_in": {
-                    "type": "string",
-                    "description": "Check-in date (YYYY-MM-DD)"
-                },
-                "check_out": {
-                    "type": "string",
-                    "description": "Check-out date (YYYY-MM-DD)"
-                },
-                "guests": {
-                    "type": "integer",
-                    "description": "Number of guests"
-                },
-                "notes": {
-                    "type": "string",
-                    "description": "Any special requests or notes from the guest"
-                }
-            },
-            "required": ["name", "phone", "check_in", "check_out"]
-        }
-    )
-
-    # Tool 4: Create Booking
-    openai_client.register_function(
-        name="create_booking",
-        func=create_booking,
-        description="Create a confirmed booking for a guest. Use this when a guest wants to complete their reservation.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "guest_name": {
-                    "type": "string",
-                    "description": "Guest's full name"
-                },
-                "guest_email": {
-                    "type": "string",
-                    "description": "Guest's email address"
-                },
-                "guest_phone": {
-                    "type": "string",
-                    "description": "Guest's phone number"
-                },
-                "check_in": {
-                    "type": "string",
-                    "description": "Check-in date (YYYY-MM-DD)"
-                },
-                "check_out": {
-                    "type": "string",
-                    "description": "Check-out date (YYYY-MM-DD)"
-                },
-                "room_type": {
-                    "type": "string",
-                    "description": "Type of room (Standard Queen, King Suite, Pet-Friendly, Deluxe Suite)"
-                },
-                "adults": {
-                    "type": "integer",
-                    "description": "Number of adult guests (default 2)"
-                },
-                "pets": {
-                    "type": "boolean",
-                    "description": "Whether the guest is bringing pets"
-                },
-                "special_requests": {
-                    "type": "string",
-                    "description": "Any special requests or notes from the guest"
-                }
-            },
-            "required": ["guest_name", "guest_email", "guest_phone", "check_in", "check_out", "room_type"]
-        }
-    )
-
-    # Tool 5: Generate Payment Link (for confirmed bookings)
-    openai_client.register_function(
-        name="generate_payment_link",
-        func=generate_payment_link,
-        description="Generate a secure payment link for a confirmed booking. Only use this after creating a lead and confirming the booking details.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "lead_id": {
-                    "type": "string",
-                    "description": "The lead ID from create_lead"
-                },
-                "amount": {
-                    "type": "number",
-                    "description": "Total amount in USD"
-                }
-            },
-            "required": ["lead_id", "amount"]
-        }
-    )
-
-    logger.info("Hotel tools registered successfully")
+    for schema in registry.functions.values():
+        openai_client.register_function(
+            name=schema.name,
+            func=schema.function,
+            description=schema.description,
+            parameters=schema.parameters,
+        )
 
 
 def get_hotel_config() -> Dict[str, Any]:
-    """
-    Get complete hotel configuration for OpenAI Realtime API
+    """Return the base configuration payload for the hotel."""
 
-    Returns:
-        Dictionary with hotel-specific configuration
-    """
     return {
         "model": "gpt-4o-realtime-preview-2024-12-17",
-        "voice": "alloy",  # Warm, friendly voice
+        "voice": "alloy",
         "instructions": WEST_BETHEL_INSTRUCTIONS,
         "modalities": ["text", "audio"],
         "input_audio_format": "pcm16",
         "output_audio_format": "pcm16",
-        "temperature": 0.7,  # Balanced between creative and consistent
-        "input_audio_transcription": {
-            "model": "whisper-1"
-        },
+        "temperature": 0.7,
+        "input_audio_transcription": {"model": "whisper-1"},
         "turn_detection": {
-            "type": "server_vad",  # Server-side Voice Activity Detection
+            "type": "server_vad",
             "threshold": 0.5,
-            "prefix_padding_ms": 300,  # Include 300ms before speech starts
-            "silence_duration_ms": 700  # 700ms silence = end of turn
-        }
+            "prefix_padding_ms": 300,
+            "silence_duration_ms": 700,
+        },
     }
 
 
 def create_hotel_realtime_client(api_key: Optional[str] = None) -> RealtimeAPIClient:
-    """
-    Create and configure OpenAI Realtime client for West Bethel Motel
+    """Create and configure a realtime client for the hotel agent."""
 
-    Args:
-        api_key: OpenAI API key (uses environment variable if None)
-
-    Returns:
-        Configured RealtimeAPIClient ready to use
-    """
     config = get_hotel_config()
-
     client = RealtimeAPIClient(
         api_key=api_key,
         model=config["model"],
         voice=config["voice"],
-        instructions=config["instructions"]
+        instructions=config["instructions"],
     )
 
-    # Register hotel-specific tools
     register_hotel_tools(client)
-
-    logger.info("West Bethel Motel Realtime client created and configured")
+    logger.info("Realtime client created and hotel tools registered")
 
     return client

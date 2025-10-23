@@ -11,7 +11,7 @@ Handles the lifecycle of voice interactions including:
 import uuid
 import logging
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -32,6 +32,12 @@ class MessageRole(Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+
+
+class SessionDirection(Enum):
+    """Direction of the voice interaction"""
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
 
 
 @dataclass
@@ -85,6 +91,7 @@ class VoiceSession:
     recording_url: Optional[str] = None
     language: str = "en-US"
     metadata: Dict[str, Any] = field(default_factory=dict)
+    direction: SessionDirection = SessionDirection.INBOUND
 
     def add_message(self, role: str, content: str, **kwargs) -> None:
         """
@@ -140,6 +147,7 @@ class VoiceSession:
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "status": self.status.value,
+            "direction": self.direction.value,
             "conversation_history": [msg.to_dict() for msg in self.conversation_history],
             "tools_used": self.tools_used,
             "recording_url": self.recording_url,
@@ -174,7 +182,8 @@ class SessionManager:
         channel: str,
         caller_id: str,
         language: str = "en-US",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        direction: Union[SessionDirection, str] = SessionDirection.INBOUND,
     ) -> VoiceSession:
         """
         Create a new voice session
@@ -189,12 +198,19 @@ class SessionManager:
             VoiceSession: The created session
         """
         session_id = str(uuid.uuid4())
+        direction_enum = (
+            direction
+            if isinstance(direction, SessionDirection)
+            else SessionDirection(direction)
+        )
+
         session = VoiceSession(
             session_id=session_id,
             channel=channel,
             caller_id=caller_id,
             language=language,
-            metadata=metadata or {}
+            metadata=metadata or {},
+            direction=direction_enum,
         )
 
         self._active_sessions[session_id] = session
@@ -287,18 +303,20 @@ class SessionManager:
         Returns:
             List of VoiceSession objects
         """
-        sessions = [
-            session for session in self._active_sessions.values()
+        sessions = {
+            session.session_id: session
+            for session in self._active_sessions.values()
             if session.caller_id == caller_id
-        ]
+        }
 
         # Also load from database if available
         if self.db_session:
             db_sessions = await self._load_sessions_by_caller(caller_id)
-            sessions.extend(db_sessions)
+            for session in db_sessions:
+                sessions[session.session_id] = session
 
         logger.debug(f"Found {len(sessions)} sessions for caller {caller_id}")
-        return sessions
+        return list(sessions.values())
 
     async def update_session(self, session: VoiceSession) -> bool:
         """
@@ -329,33 +347,41 @@ class SessionManager:
             bool: True if successful
         """
         try:
-            from packages.voice.models import VoiceCall, ConversationTurn
+            from packages.voice.models import ConversationTurn, VoiceCall
 
-            # Create or update VoiceCall record
-            call = self.db_session.query(VoiceCall).filter_by(
-                session_id=session.session_id
-            ).first()
+            call = (
+                self.db_session.query(VoiceCall)
+                .filter_by(session_id=session.session_id)
+                .first()
+            )
 
             if not call:
                 call = VoiceCall(
                     session_id=session.session_id,
                     channel=session.channel,
                     caller_id=session.caller_id,
-                    direction='inbound',  # TODO: Track this properly
+                    direction=session.direction.value,
                     start_time=session.start_time,
                     language=session.language,
                 )
                 self.db_session.add(call)
+                self.db_session.flush()
+            else:
+                self.db_session.flush()
 
-            # Update call details
             call.end_time = session.end_time
             call.status = session.status.value
             call.recording_url = session.recording_url
             call.tools_executed = session.tools_used
             call.duration_seconds = int(session.get_duration_seconds())
             call.call_metadata = session.metadata
+            call.direction = session.direction.value
 
-            # Add conversation turns
+            if call.id is not None:
+                self.db_session.query(ConversationTurn).filter_by(call_id=call.id).delete(
+                    synchronize_session=False
+                )
+
             for idx, msg in enumerate(session.conversation_history):
                 turn = ConversationTurn(
                     call_id=call.id,
@@ -365,7 +391,7 @@ class SessionManager:
                     audio_url=msg.audio_url,
                     timestamp=msg.timestamp,
                     latency_ms=msg.latency_ms,
-                    metadata=msg.metadata,
+                    turn_metadata=msg.metadata,
                 )
                 self.db_session.add(turn)
 
@@ -398,35 +424,7 @@ class SessionManager:
             if not call:
                 return None
 
-            # Reconstruct session from database
-            session = VoiceSession(
-                session_id=call.session_id,
-                channel=call.channel,
-                caller_id=call.caller_id,
-                start_time=call.start_time,
-                end_time=call.end_time,
-                status=SessionStatus(call.status),
-                recording_url=call.recording_url,
-                language=call.language,
-                metadata=call.call_metadata or {},
-            )
-
-            # Load conversation history
-            for turn in call.conversation_turns:
-                session.conversation_history.append(Message(
-                    role=turn.role,
-                    content=turn.content,
-                    timestamp=turn.timestamp,
-                    audio_url=turn.audio_url,
-                    latency_ms=turn.latency_ms,
-                    metadata=turn.metadata,
-                ))
-
-            # Load tools used
-            if call.tools_executed:
-                session.tools_used = call.tools_executed
-
-            return session
+            return await self._build_session_from_call(call)
 
         except Exception as e:
             logger.error(f"Failed to load session {session_id}: {e}")
@@ -442,5 +440,69 @@ class SessionManager:
         Returns:
             List of VoiceSession objects
         """
-        # TODO: Implement database query
-        return []
+        try:
+            from packages.voice.models import VoiceCall
+
+            calls = (
+                self.db_session.query(VoiceCall)
+                .filter_by(caller_id=caller_id)
+                .order_by(VoiceCall.start_time.desc())
+                .all()
+            )
+
+            sessions: List[VoiceSession] = []
+            for call in calls:
+                session = await self._build_session_from_call(call)
+                if session:
+                    sessions.append(session)
+            return sessions
+        except Exception as e:
+            logger.error(f"Failed to load sessions for caller {caller_id}: {e}")
+            return []
+
+    async def _build_session_from_call(self, call) -> Optional[VoiceSession]:
+        """
+        Helper to construct a VoiceSession from a VoiceCall ORM object.
+        """
+        try:
+            try:
+                status_value = SessionStatus(call.status)
+            except ValueError:
+                status_value = SessionStatus.ACTIVE
+
+            direction_value = call.direction or SessionDirection.INBOUND.value
+            session = VoiceSession(
+                session_id=call.session_id,
+                channel=call.channel,
+                caller_id=call.caller_id,
+                start_time=call.start_time,
+                end_time=call.end_time,
+                status=status_value,
+                recording_url=call.recording_url,
+                language=call.language,
+                metadata=call.call_metadata or {},
+                direction=SessionDirection(direction_value),
+            )
+
+            for turn in call.conversation_turns:
+                session.conversation_history.append(
+                    Message(
+                        role=turn.role,
+                        content=turn.content,
+                        timestamp=turn.timestamp,
+                        audio_url=turn.audio_url,
+                        latency_ms=turn.latency_ms,
+                        metadata=turn.turn_metadata,
+                    )
+                )
+
+            if call.tools_executed:
+                session.tools_used = call.tools_executed
+
+            if call.end_time:
+                session.end_time = call.end_time
+
+            return session
+        except Exception as exc:
+            logger.error(f"Failed to build session from call {call.session_id}: {exc}")
+            return None
