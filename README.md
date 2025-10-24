@@ -58,9 +58,32 @@ AI helpdesk agent for IT support
 
 ## 🚀 Quick Start
 
+### ☁️ Deploy to GitHub Codespaces (Recommended)
+
+**Fastest way to test the platform** - no local setup required!
+
+1. Push this repository to GitHub
+2. Click **Code** → **Codespaces** → **Create codespace on main**
+3. Wait 3-5 minutes for automatic setup
+4. Start testing immediately!
+
+See [CODESPACES_DEPLOYMENT.md](CODESPACES_DEPLOYMENT.md) for detailed instructions.
+
+**Benefits:**
+- ✓ Fresh Linux environment with Docker
+- ✓ All dependencies installed automatically
+- ✓ PostgreSQL database configured
+- ✓ No WSL or local configuration issues
+- ✓ 60 hours/month free tier
+
+---
+
+### 💻 Local Installation
+
 ### Prerequisites
 - Python 3.11+
 - pip or uv package manager
+- Docker (for PostgreSQL)
 
 ### Installation
 
