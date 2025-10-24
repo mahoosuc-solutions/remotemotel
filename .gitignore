@@ -97,5 +97,10 @@ Desktop.ini
 
 # Additional sensitive files
 .env.template
-*_COMPLETE.md
 GET_TWILIO_CREDENTIALS.md
+
+# Allow completion reports to be committed
+!PLATFORM_100_COMPLETE.md
+!*_TEST_*_COMPLETE.md
+!VOICE_PHASE*_COMPLETE.md
+!INTEGRATION_COMPLETE*.md
