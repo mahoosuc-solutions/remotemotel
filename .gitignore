@@ -94,3 +94,8 @@ Thumbs.db
 .Trashes
 ehthumbs.db
 Desktop.ini
+
+# Additional sensitive files
+.env.template
+*_COMPLETE.md
+GET_TWILIO_CREDENTIALS.md
