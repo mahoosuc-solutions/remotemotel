@@ -60,6 +60,15 @@ class RateType(str, Enum):
     LAST_MINUTE = "last_minute"
 
 
+class LeadStatus(str, Enum):
+    """Lead status enumeration"""
+    NEW = "new"
+    CONTACTED = "contacted"
+    QUALIFIED = "qualified"
+    CONVERTED = "converted"
+    LOST = "lost"
+
+
 class Room(Base):
     """Room definition and configuration"""
     __tablename__ = "rooms"
@@ -314,7 +323,7 @@ class InventoryBlock(Base):
 class HotelSettings(Base):
     """Hotel configuration and settings"""
     __tablename__ = "hotel_settings"
-    
+
     id = Column(Integer, primary_key=True)
     setting_key = Column(String(100), unique=True, nullable=False)
     setting_value = Column(Text, nullable=False)
@@ -323,6 +332,28 @@ class HotelSettings(Base):
     category = Column(String(50))  # pricing, policies, features, etc.
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     def __repr__(self):
         return f"<HotelSettings(key='{self.setting_key}', value='{self.setting_value}')>"
+
+
+class Lead(Base):
+    """Lead/inquiry model for potential guests"""
+    __tablename__ = "leads"
+
+    id = Column(Integer, primary_key=True)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100))
+    email = Column(String(255), nullable=False)
+    phone = Column(String(50))
+    check_in_date = Column(String(50))
+    check_out_date = Column(String(50))
+    adults = Column(Integer, default=2)
+    source = Column(String(50), default="web")
+    status = Column(SQLEnum(LeadStatus), default=LeadStatus.NEW)
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Lead(id={self.id}, name='{self.first_name} {self.last_name}', email='{self.email}')>"
