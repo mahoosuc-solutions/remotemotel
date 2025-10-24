@@ -33,6 +33,7 @@ venv.bak/
 .env.local
 .env.production
 .env.*.local
+# Note: .env.codespaces is tracked (contains only placeholders)
 
 # IDE
 .vscode/

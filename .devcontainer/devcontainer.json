@@ -7,31 +7,9 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
 
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "ms-python.black-formatter",
-        "charliermarsh.ruff",
-        "ms-azuretools.vscode-docker",
-        "redhat.vscode-yaml",
-        "GitHub.copilot"
-      ],
-      "settings": {
-        "python.defaultInterpreterPath": "/usr/local/bin/python",
-        "python.formatting.provider": "black",
-        "python.linting.enabled": true,
-        "python.linting.ruffEnabled": true,
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.organizeImports": "explicit"
-        }
-      }
-    }
-  },
-
+  "onCreateCommand": "cp .env.codespaces .env.local",
   "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
 
   "forwardPorts": [8000, 5433],
   "portsAttributes": {
@@ -47,11 +25,51 @@
 
   "remoteEnv": {
     "PYTHONPATH": "${containerWorkspaceFolder}",
-    "ENV": "development",
-    "DATABASE_URL": "postgresql://stayhive:stayhive@localhost:5433/stayhive"
+    "ENV": "codespaces",
+    "DATABASE_URL": "postgresql://stayhive:stayhive@localhost:5433/stayhive",
+    "SKIP_DEPS_CHECK": "1"
+  },
+
+  "secrets": {
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for embeddings and voice AI (REQUIRED)"
+    },
+    "TWILIO_ACCOUNT_SID": {
+      "description": "Twilio Account SID (optional for voice testing)"
+    },
+    "TWILIO_AUTH_TOKEN": {
+      "description": "Twilio Auth Token (optional for voice testing)"
+    },
+    "STRIPE_API_KEY": {
+      "description": "Stripe API key (optional for payment testing)"
+    }
   },
 
   "mounts": [
     "source=${localWorkspaceFolderBasename}-venv,target=${containerWorkspaceFolder}/.venv,type=volume"
-  ]
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "GitHub.copilot"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+        "python.formatting.provider": "black",
+        "python.linting.enabled": true,
+        "python.linting.ruffEnabled": true,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": "explicit"
+        }
+      }
+    }
+  }
 }

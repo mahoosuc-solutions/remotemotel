@@ -11,8 +11,19 @@ from packages.hotel.models import (
     RoomType, RateType, HotelSettings
 )
 
-def seed_database():
+
+def get_database_url():
+    """Get database URL from environment with fallback for Codespaces."""
     db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        # Fallback for Codespaces
+        db_url = "postgresql://stayhive:stayhive@localhost:5433/stayhive"
+        print(f"⚠️  DATABASE_URL not set, using default: {db_url}")
+    return db_url
+
+
+def seed_database():
+    db_url = get_database_url()
     engine = create_engine(db_url)
     # Don't create tables - use Alembic migrations instead
     # Base.metadata.create_all(engine)

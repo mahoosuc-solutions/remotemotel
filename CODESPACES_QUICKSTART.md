@@ -1,481 +1,231 @@
-# Codespaces Quick Start Guide
+# GitHub Codespaces Quickstart
 
-**Goal**: Get the RemoteMotel platform fully operational in GitHub Codespaces
-**Time**: ~30 minutes for basic setup, 5-7 days for full integration
-**Outcome**: Fully functional hotel AI platform with passing tests
+Get the RemoteMotel platform running in GitHub Codespaces in under 5 minutes.
 
----
+## Prerequisites
 
-## Step 1: Access Your Codespace (2 minutes)
+1. **GitHub Account** with Codespaces enabled
+2. **OpenAI API Key** (required for knowledge base)
+   - Get one at: https://platform.openai.com/api-keys
+3. **Optional**: Twilio and Stripe credentials for full testing
 
-You should already have created your Codespace at:
-**https://github.com/mahoosuc-solutions/remotemotel**
+## Setup Steps
 
-If the Codespace is running:
-1. Go to GitHub repository
-2. Click **Code** → **Codespaces**
-3. Click on your existing Codespace name
+### Step 1: Configure Secrets (One-time setup)
 
-The automatic setup should have completed with:
-```
-==================================
-✓ Setup Complete!
-==================================
-```
+1. Go to: `https://github.com/YOUR_ORG/front-desk/settings/secrets/codespaces`
+2. Add `OPENAI_API_KEY` secret with your OpenAI key
+3. (Optional) Add `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`
+4. (Optional) Add `STRIPE_API_KEY`
 
----
+See [CODESPACES_SECRETS.md](CODESPACES_SECRETS.md) for detailed instructions.
 
-## Step 2: Configure Environment (5 minutes)
+### Step 2: Create Codespace
 
-### Create .env.local File
+1. Go to: `https://github.com/YOUR_ORG/front-desk`
+2. Click green "Code" button
+3. Select "Codespaces" tab
+4. Click "Create codespace on main"
 
-```bash
-# Copy template
-cp .env.example .env.local
+**Wait 3-5 minutes** for automatic setup:
+- Python environment configured
+- PostgreSQL container started
+- Database migrated and seeded
+- Knowledge base ingested (if OpenAI key set)
 
-# Edit with nano or VS Code
-nano .env.local
-```
-
-### Required Configuration
-
-**Minimum (for testing without external APIs)**:
-```env
-ENV=development
-DATABASE_URL=postgresql://stayhive:stayhive@localhost:5433/stayhive
-```
-
-**Recommended (for full functionality)**:
-```env
-ENV=development
-DATABASE_URL=postgresql://stayhive:stayhive@localhost:5433/stayhive
-OPENAI_API_KEY=sk-your-actual-key-here
-```
-
-**Optional (for advanced features)**:
-```env
-# For voice calls
-TWILIO_ACCOUNT_SID=ACxxxx
-TWILIO_AUTH_TOKEN=xxxx
-TWILIO_PHONE_NUMBER=+15551234567
-
-# For payment links
-STRIPE_API_KEY=sk_test_xxxx
-```
-
-**Save and exit**: `Ctrl+X`, then `Y`, then `Enter`
-
----
-
-## Step 3: Verify Database (2 minutes)
+### Step 3: Verify Setup
 
 ```bash
-# Activate virtual environment
+# Check secrets
+python scripts/validate_secrets.py
+
+# Verify database
+docker compose -f docker-compose.postgres.yml exec postgres psql -U stayhive -d stayhive -c "SELECT COUNT(*) FROM rooms;"
+
+# Run verification script
+python scripts/verify_codespaces_setup.py
+```
+
+### Step 4: Start the Server
+
+```bash
+# Activate environment
 source .venv/bin/activate
 
-# Check PostgreSQL is running
-docker compose -f docker-compose.postgres.yml ps
-
-# Should show:
-# NAME                    STATUS
-# front-desk-postgres     Up X minutes
-
-# Check tables were created
-docker compose -f docker-compose.postgres.yml exec postgres psql -U stayhive -d stayhive -c "\dt"
-
-# Should show 13 tables (9 hotel + 4 voice)
-```
-
-**Expected output**:
-```
-             List of relations
- Schema |         Name          | Type  |  Owner
---------+-----------------------+-------+----------
- public | bookings              | table | stayhive
- public | guests                | table | stayhive
- public | hotel_settings        | table | stayhive
- public | inventory_blocks      | table | stayhive
- public | payments              | table | stayhive
- public | rate_rules            | table | stayhive
- public | room_availability     | table | stayhive
- public | room_rates            | table | stayhive
- public | rooms                 | table | stayhive
- public | voice_analytics       | table | stayhive
- public | voice_calls           | table | stayhive
- public | voice_conversations   | table | stayhive
- public | voice_transcripts     | table | stayhive
-```
-
----
-
-## Step 4: Seed Database (5 minutes)
-
-### Download seed_data.py Script
-
-Create `scripts/seed_data.py` with the content from **INTEGRATION_PLAN.md** Phase 2, Task 2.1.
-
-Or create it quickly:
-```bash
-# Copy from integration plan (search for "def seed_database")
-nano scripts/seed_data.py
-# Paste the full script from INTEGRATION_PLAN.md
-```
-
-### Run Seed Script
-
-```bash
-python scripts/seed_data.py
-```
-
-**Expected output**:
-```
-✓ Database seeded successfully!
-  - Created 10 rooms
-  - Created 20 rates
-  - Created 900 availability records
-```
-
-### Verify Seed Data
-
-```bash
-# Check rooms
-docker compose -f docker-compose.postgres.yml exec postgres psql -U stayhive -d stayhive -c "SELECT room_number, room_type, floor FROM rooms ORDER BY room_number;"
-
-# Should show 10 rooms (101-105, 201-205)
-```
-
----
-
-## Step 5: Test the Platform (5 minutes)
-
-### Test 1: Platform Validation
-
-```bash
-python test_platform.py
-```
-
-**Expected**: May show some import warnings, but should run without major errors.
-
-### Test 2: Start FastAPI Server
-
-```bash
-# In terminal 1
+# Start FastAPI server
 python apps/operator-runtime/main.py
 ```
 
-**Expected output**:
-```
-INFO:     Started server process
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
+Server will be available at: `https://YOUR_CODESPACE-8000.app.github.dev`
 
-Codespaces will show a notification: "Your application running on port 8000 is available."
-Click **Open in Browser** or go to the **Ports** tab.
+## Common Tasks
 
-### Test 3: Health Check (in new terminal)
+### Run All Tests
 
 ```bash
-# Open new terminal (Ctrl+Shift+`)
-curl http://localhost:8000/health
+pytest tests/integration/ -v
 ```
 
-**Expected**:
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-10-24T...",
-  "version": "1.0.0"
-}
-```
-
-### Test 4: Check Availability
+### Run Specific Test Category
 
 ```bash
-curl "http://localhost:8000/availability?check_in=2025-11-01&check_out=2025-11-03&adults=2&pets=false"
+pytest tests/integration/ -v -m integration  # Database tests
+pytest tests/integration/ -v -m knowledge    # Knowledge base tests
+pytest tests/integration/ -v -m voice        # Voice module tests
 ```
 
-**Expected**: JSON response with available rooms and pricing.
-
----
-
-## Step 6: Run Tests (5 minutes)
-
-### Integration Tests
+### Run Smart Test Runner (Skips unavailable services)
 
 ```bash
-# Stop the server (Ctrl+C in terminal 1)
-
-# Run integration tests
-pytest tests/integration/test_hotel_system.py -v
+./scripts/run_codespaces_tests.sh
 ```
 
-**Expected**: 10+ tests pass
-
-### Voice Tests
+### Ingest Additional Documentation
 
 ```bash
-pytest tests/unit/voice/ -v
+./scripts/ingest_all_docs.sh  # All 10 documents (slower)
+./scripts/ingest_essential_docs.sh  # 4 core documents (faster)
 ```
 
-**Expected**: 70 tests pass
-
-### All Tests
+### Check Database Status
 
 ```bash
-pytest tests/ -v --tb=short
+# View PostgreSQL logs
+docker compose -f docker-compose.postgres.yml logs -f postgres
+
+# Connect to database
+docker compose -f docker-compose.postgres.yml exec postgres psql -U stayhive -d stayhive
+
+# Count seeded records
+docker compose -f docker-compose.postgres.yml exec -T postgres psql -U stayhive -d stayhive -c "SELECT 'rooms' as table, COUNT(*) FROM rooms UNION SELECT 'rates', COUNT(*) FROM room_rates UNION SELECT 'availability', COUNT(*) FROM room_availability;"
 ```
 
-**Expected**: Majority of tests pass
+### Reset Database
 
----
+```bash
+# Stop and remove containers
+docker compose -f docker-compose.postgres.yml down -v
 
-## Step 7: Access Web Interface (Optional)
+# Recreate
+docker compose -f docker-compose.postgres.yml up -d
 
-### Option A: Port Forwarding (Automatic)
+# Wait for ready
+until docker compose -f docker-compose.postgres.yml exec -T postgres pg_isready -U stayhive; do sleep 1; done
 
-1. Start the server: `python apps/operator-runtime/main.py`
-2. Click notification or go to **Ports** tab
-3. Click globe icon next to port 8000
-4. Opens in browser
+# Recreate schema
+docker compose -f docker-compose.postgres.yml exec -T postgres psql -U stayhive -d stayhive < scripts/create_knowledge_schema.sql
 
-### Option B: Manual URL
+# Run migrations
+export SKIP_DEPS_CHECK=1
+alembic upgrade head
 
-1. Go to **Ports** tab in VS Code
-2. Find port 8000
-3. Copy the forwarded URL (looks like: `https://xyz-8000.app.github.dev`)
-4. Open in browser
+# Seed data
+python scripts/seed_data.py
 
-### Test Endpoints in Browser
-
-- Health: `https://your-url-8000.app.github.dev/health`
-- Docs: `https://your-url-8000.app.github.dev/docs` (Swagger UI)
-- Availability: `https://your-url-8000.app.github.dev/availability?check_in=2025-11-01&check_out=2025-11-03&adults=2`
-
----
-
-## What's Working Now
-
-After these steps, you should have:
-
-✅ **Infrastructure**
-- PostgreSQL running on port 5433
-- 10 rooms in database
-- 20 room rates configured
-- 900 days of availability
-- Hotel settings saved
-
-✅ **API Endpoints**
-- GET /health - Health check
-- GET /availability - Check room availability (real data!)
-- POST /voice/twilio/inbound - Voice call webhook
-
-✅ **Tools**
-- check_availability - Returns real room data
-- create_booking - Creates bookings in database
-- generate_payment_link - Generates Stripe or mock links
-
----
-
-## Next Steps
-
-### Immediate (Optional)
-
-1. **Integrate create_lead** (see INTEGRATION_PLAN.md Phase 3)
-2. **Ingest knowledge base** (needs OPENAI_API_KEY)
-3. **Run all integration tests** (see INTEGRATION_PLAN.md Phase 5)
-
-### This Week (Phase 1)
-
-Follow **INTEGRATION_PLAN.md** to:
-- Complete create_lead database integration
-- Ingest 17+ documentation files
-- Achieve 100% test pass rate
-- Verify all endpoints working
-
-### Next Week (Phase 2)
-
-- Configure Twilio for voice calls
-- Set up Stripe for payments
-- Deploy to Cloud Run
-- Beta launch!
-
----
+# Ingest knowledge
+./scripts/ingest_essential_docs.sh
+```
 
 ## Troubleshooting
 
-### Database Not Running
+### PostgreSQL Won't Start
 
 ```bash
-# Check status
+# Check container status
 docker compose -f docker-compose.postgres.yml ps
 
-# Start if stopped
-docker compose -f docker-compose.postgres.yml up -d
-
 # View logs
-docker compose -f docker-compose.postgres.yml logs
-```
+docker compose -f docker-compose.postgres.yml logs postgres
 
-### Import Errors
-
-```bash
-# Verify PYTHONPATH
-echo $PYTHONPATH
-# Should show: /workspaces/remotemotel
-
-# If not set:
-export PYTHONPATH=/workspaces/remotemotel
-```
-
-### Server Won't Start
-
-```bash
-# Check if something is on port 8000
-lsof -i :8000
-
-# Kill if needed
-pkill -f "python apps/operator-runtime/main.py"
-
-# Try again
-python apps/operator-runtime/main.py
+# Restart
+docker compose -f docker-compose.postgres.yml restart
 ```
 
 ### Tests Failing
 
 ```bash
-# Run with more verbosity
-pytest tests/ -v -s
+# Validate secrets
+python scripts/validate_secrets.py
 
-# Run specific test
-pytest tests/integration/test_hotel_system.py::test_name -v
+# Check environment
+env | grep -E "DATABASE_URL|OPENAI|TWILIO|STRIPE"
 
-# Check test database
-pytest tests/ --collect-only  # See what tests exist
+# Run single test
+pytest tests/integration/test_hotel_system.py::TestHotelSystemIntegration::test_rate_service_integration -v
 ```
 
----
-
-## Daily Workflow
-
-Once set up, your daily workflow is:
+### Knowledge Base Empty
 
 ```bash
-# 1. Open Codespace
-# (from GitHub web interface)
+# Check if documents were ingested
+python3 -c "
+import asyncio
+from packages.knowledge.service import KnowledgeService
 
-# 2. Activate environment
-source .venv/bin/activate
+async def check():
+    service = KnowledgeService()
+    docs = await service.list_documents('remotemotel', limit=50)
+    print(f'Documents: {len(docs)}')
+    for doc in docs:
+        print(f'  - {doc.title}')
 
-# 3. Check database
-docker compose -f docker-compose.postgres.yml ps
+asyncio.run(check())
+"
 
-# 4. Start developing
-code .
-
-# 5. Run tests as you work
-pytest tests/integration/ -v
-
-# 6. Start server to test
-python apps/operator-runtime/main.py
-
-# 7. Commit changes
-git add .
-git commit -m "feat: your changes"
-git push
+# Re-ingest if empty
+./scripts/ingest_essential_docs.sh
 ```
 
----
+### Codespace Running Slow
 
-## Commands Reference
+- Check CPU/memory usage: `htop`
+- Stop PostgreSQL when not testing: `docker compose -f docker-compose.postgres.yml stop`
+- Use smaller Codespace machine type in settings
 
-### Database
+## Features Available in Codespaces
 
-```bash
-# Start PostgreSQL
-docker compose -f docker-compose.postgres.yml up -d
+### Fully Functional
 
-# Stop PostgreSQL
-docker compose -f docker-compose.postgres.yml down
+- Hotel management (rooms, rates, availability, bookings)
+- Knowledge base with semantic search
+- Lead capture and management
+- Database operations
+- All API endpoints
 
-# Connect to PostgreSQL
-docker compose -f docker-compose.postgres.yml exec postgres psql -U stayhive -d stayhive
+### Requires Configuration
 
-# Backup database
-docker compose -f docker-compose.postgres.yml exec postgres pg_dump -U stayhive stayhive > backup.sql
-```
+- Voice AI (needs Twilio credentials)
+- Payment links (needs Stripe credentials)
+- External webhooks (use ngrok or Codespaces forwarding)
 
-### Testing
+## Performance Notes
 
-```bash
-# All tests
-pytest tests/ -v
+- **Initial setup**: 3-5 minutes (one-time)
+- **Restart**: 30-60 seconds
+- **Test suite**: 8-15 seconds (depending on markers)
+- **Knowledge ingestion**: 15-45 seconds (depending on documents)
 
-# Integration tests only
-pytest tests/integration/ -v
+## Cost Considerations
 
-# Voice tests only
-pytest tests/unit/voice/ -v
+- **GitHub Codespaces**: 60 hours/month free for individual accounts
+- **OpenAI API**: ~$0.02 per knowledge ingestion (10 documents)
+- **Twilio**: Free tier available for testing
+- **Stripe**: Test mode is free
 
-# With coverage
-pytest tests/ --cov=packages --cov-report=html
+## Next Steps
 
-# Single test file
-pytest tests/integration/test_hotel_system.py -v
-
-# Single test
-pytest tests/integration/test_hotel_system.py::test_name -v
-```
-
-### Development
-
-```bash
-# Format code
-black packages/ apps/ tests/
-
-# Lint code
-ruff check packages/ apps/ tests/
-
-# Type check
-mypy packages/ apps/
-
-# Start server
-python apps/operator-runtime/main.py
-
-# Start server with reload (development)
-uvicorn apps.operator_runtime.main:app --reload
-```
-
----
-
-## Success Checklist
-
-After completing this quick start:
-
-- [ ] Codespace is running
-- [ ] .env.local configured
-- [ ] PostgreSQL running
-- [ ] 13 tables created
-- [ ] 10 rooms in database
-- [ ] 20 rates configured
-- [ ] 900 availability records
-- [ ] Health endpoint working
-- [ ] Availability endpoint returns real data
-- [ ] Integration tests passing
-- [ ] Voice tests passing (70/70)
-
-**If all checked**: ✅ Platform is operational! Proceed with INTEGRATION_PLAN.md
-
----
+1. **Explore the API**: http://localhost:8000/docs (FastAPI Swagger)
+2. **Run the platform**: [PLATFORM_100_COMPLETE.md](PLATFORM_100_COMPLETE.md)
+3. **Build features**: [GUEST_AND_STAFF_FEATURES_ROADMAP.md](GUEST_AND_STAFF_FEATURES_ROADMAP.md)
+4. **Deploy to production**: [CLOUD_DEPLOYMENT_GUIDE.md](CLOUD_DEPLOYMENT_GUIDE.md)
 
 ## Support
 
-- **Detailed Integration**: See [INTEGRATION_PLAN.md](INTEGRATION_PLAN.md)
-- **Deployment Guide**: See [CODESPACES_DEPLOYMENT.md](CODESPACES_DEPLOYMENT.md)
-- **Platform Status**: See [PLATFORM_STATUS.md](PLATFORM_STATUS.md)
-- **Full Roadmap**: See [COMPLETE_IMPLEMENTATION_ROADMAP.md](COMPLETE_IMPLEMENTATION_ROADMAP.md)
+- **Issues**: https://github.com/YOUR_ORG/front-desk/issues
+- **Discussions**: https://github.com/YOUR_ORG/front-desk/discussions
+- **Secrets Setup**: [CODESPACES_SECRETS.md](CODESPACES_SECRETS.md)
+- **Integration Plan**: [CODESPACES_INTEGRATION_PLAN.md](CODESPACES_INTEGRATION_PLAN.md)
 
 ---
 
-**You're now ready to develop and test the RemoteMotel platform!** 🎉
+**You're now ready to develop and test the RemoteMotel platform!**
