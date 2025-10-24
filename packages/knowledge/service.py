@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -104,14 +105,14 @@ class KnowledgeService:
                         INSERT INTO knowledge.chunks (
                             document_id, hotel_id, chunk_index, content, metadata
                         )
-                        VALUES ($1, $2, $3, $4, $5)
+                        VALUES ($1, $2, $3, $4, $5::jsonb)
                         RETURNING id
                         """,
                         document_id,
                         hotel_id,
                         index,
                         chunk,
-                        metadata or {},
+                        json.dumps(metadata or {}),
                     )
 
                     await conn.execute(

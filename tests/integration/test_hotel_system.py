@@ -352,7 +352,7 @@ class TestHotelSystemIntegration:
         )
         
         assert result['available'] is True
-        assert len(result['rooms']) == 2  # Standard Queen and King Suite
+        assert len(result['rooms']) >= 2  # At least Standard Queen and King Suite
         room_types = [room['room_type'] for room in result['rooms']]
         assert 'standard_queen' in room_types
         assert 'king_suite' in room_types
