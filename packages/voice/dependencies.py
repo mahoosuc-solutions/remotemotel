@@ -28,12 +28,18 @@ OPTIONAL_DEPENDENCIES = [
 def check_required_dependencies():
     """
     Check that all required dependencies are available.
-    
+
     Raises:
-        ImportError: If any required dependency is missing
+        ImportError: If any required dependency is missing (unless SKIP_DEPS_CHECK is set)
     """
+    import os
+
+    # Skip dependency check for migrations and other non-runtime contexts
+    if os.getenv("SKIP_DEPS_CHECK", "").lower() in ("1", "true", "yes"):
+        return
+
     missing_deps = []
-    
+
     # Check required dependencies
     for module_name, package_name, error_message in REQUIRED_DEPENDENCIES:
         try:
@@ -42,7 +48,7 @@ def check_required_dependencies():
         except ImportError:
             missing_deps.append((package_name, error_message))
             logger.error(f"✗ {package_name} is missing")
-    
+
     # Check optional dependencies
     for module_name, package_name, error_message in OPTIONAL_DEPENDENCIES:
         try:
@@ -50,16 +56,16 @@ def check_required_dependencies():
             logger.debug(f"✓ {package_name} is available")
         except ImportError:
             logger.warning(f"⚠ {package_name} is missing - {error_message}")
-    
+
     if missing_deps:
         error_msg = "Missing required dependencies:\n"
         for package_name, error_message in missing_deps:
             error_msg += f"  - {error_message}\n"
         error_msg += f"\nInstall missing dependencies with:\n"
         error_msg += f"  pip install {' '.join(dep[0] for dep in missing_deps)}"
-        
+
         raise ImportError(error_msg)
-    
+
     logger.info("✓ All required dependencies are available")
 
 def get_dependency_info():
